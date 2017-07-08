@@ -1,0 +1,500 @@
+library(lda)
+lda.collapsed.gibbs.sampler
+showMethods(lda.collapsed.gibbs.sampler)
+methods(lda.collapsed.gibbs.sampler)
+untar(download.packages(pkgs = "lda",#
+                        destdir = ".",#
+                        type = "source")[,2])
+ls
+require(lda)#
+##run this first#
+demo(lda)#
+##then run this#
+result <- lda.collapsed.gibbs.sampler(cora.documents,#
+                                       K,  ## Num clusters#
+                                       cora.vocab,#
+                                       25,  ## Num iterations#
+                                       0.1,#
+                                       0.1,#
+                                       compute.log.likelihood=TRUE,#
+                                       initial= list(assignments=result$assignments))
+new_assignments <- result$assignments
+new_assignments
+new_assignments[[2410]]
+new_assignments[[2410]][10]
+new_assignments[[2410]][10] <- 7
+result <- lda.collapsed.gibbs.sampler(cora.documents,#
+                                       K,  ## Num clusters#
+                                       cora.vocab,#
+                                       25,  ## Num iterations#
+                                       0.1,#
+                                       0.1,#
+                                       compute.log.likelihood=TRUE,#
+                                       initial= list(assignments=new_assignments))
+typeof(7)
+typeof(as.integer(7))
+new_assignments[[2410]][10] <- as.integer(7)
+result <- lda.collapsed.gibbs.sampler(cora.documents,#
+                                       K,  ## Num clusters#
+                                       cora.vocab,#
+                                       25,  ## Num iterations#
+                                       0.1,#
+                                       0.1,#
+                                       compute.log.likelihood=TRUE,#
+                                       initial= list(assignments=new_assignments))
+typeof(new_assignments[[2410]][10])
+typeof(new_assignments[[2410]][5])
+new_assignments <- result$assignments
+typeof(new_assignments[[2410]][5])
+typeof(new_assignments[[2410]][10])
+new_assignments[[2410]][10]
+new_assignments[[2410]][10] <- as.integer(7)
+typeof(new_assignments[[2410]][10])
+typeof(new_assignments[[2410]][5])
+result <- lda.collapsed.gibbs.sampler(cora.documents,#
+                                       K,  ## Num clusters#
+                                       cora.vocab,#
+                                       25,  ## Num iterations#
+                                       0.1,#
+                                       0.1,#
+                                       compute.log.likelihood=TRUE,#
+                                       initial= list(assignments=new_assignments))
+new_assignments[[2410]][10] <- 7
+result <- lda.collapsed.gibbs.sampler(cora.documents,#
+                                       K,  ## Num clusters#
+                                       cora.vocab,#
+                                       25,  ## Num iterations#
+                                       0.1,#
+                                       0.1,#
+                                       compute.log.likelihood=TRUE,#
+                                       initial= list(assignments=new_assignments))
+lapply(newassignments, as.integer)
+lapply(new_assignments, as.integer)
+new_assignments <- lapply(new_assignments, as.integer)
+result <- lda.collapsed.gibbs.sampler(cora.documents,#
+                                       K,  ## Num clusters#
+                                       cora.vocab,#
+                                       25,  ## Num iterations#
+                                       0.1,#
+                                       0.1,#
+                                       compute.log.likelihood=TRUE,#
+                                       initial= list(assignments=new_assignments))
+generator 	<-	 function(dataIn,K, alpha, eta){#
+				##Input: filename, number of topics, prior parameters#
+				##Ouput:  a target vector z for each document#
+				##        a simulated dataset of documents#
+			    ##The same approach was taken here: http://jmlr.org/proceedings/papers/v28/arora13.pdf#
+                require(lda)#
+	            ##generate model paramaters#
+				strings			<-	readLines(dataIn)#
+	            corpus			<-	lexicalize(strings)#
+	            print("generating model parameters phi,theta")#
+				genModel		<-	lda.collapsed.gibbs.sampler(corpus$documents,K,corpus$vocab,1000, alpha = alpha , eta = eta)#
+				genTopicVecs	<-	genModel$assignments#
+				genTopics		<-	genModel$topics#
+				phi				<-	(genTopics+eta)/(rowSums(genTopics+eta))#
+				##generate target topic vectors and data, given paramaters #
+				documents			<-	NULL#
+				targetAssignments	<-	list()#
+				print("generating synthetic dataset")#
+				for (i in 1:length(strings)){#
+				n				<-	dim(corpus$documents[[i]])[2]#
+				countTheta		<-	vector("numeric",K)#
+				tab				<-	table(genModel$assignments[[i]])#
+				countTheta[as.numeric(names(tab))+1] <- tab#
+				theta			<-	(countTheta+alpha)/sum(countTheta+alpha)#
+				pairs		<-	sapply(1:n,function(x){#
+				roll_z		<-	rmultinom(1,size=1,prob=theta)#
+				z			<-	which(roll_z==1)#
+				roll_word	<-	rmultinom(1,size=1, prob= phi[z,])#
+				word			<-	colnames(phi)[which(roll_word==1)]	#
+				list(word=word,topic=(z-1))#
+				})#
+				documents[i]			<-	paste(pairs[1,],collapse=" ")#
+				targetAssignments[[i]]	<-	as.numeric(pairs[2,])	#
+				}#
+				out							<-	list()#
+				out$documents				<-	documents#
+				out$targetAssignments		<-	targetAssignments#
+				return(out)#
+				}#
+getConstraints	<-	function(pair,feedback){#
+	            ##Input: a pair of documents and their target topic vectors , a feedback set of pairs of words and document indices#
+	            ###Example pair#
+	            #sim		<-	 generator("../../data/20ngr8.txt",10,.5,.1)#
+				#pair				<-	 list()#
+				#pair$indices		<-   c(1,3)#
+				#pair$strings[[1]]	<-	strsplit(sim$documents[[1]]," ")[[1]]#
+				#pair$strings[[2]]	<-	strsplit(sim$documents[[3]]," ")[[1]]#
+				#pair$assignments[[1]]	<-	sim$targetAssignments[[1]]#
+				#pair$assignments[[2]]	<-	sim$targetAssignments[[3]]#
+	            ###Feedback is a list as long as the number of groups of pairs. Within pair groups must link, accross group pairs cannot link.#
+	            ###Example feedback with 3 groups on doc with index 1#
+	            #feedback			<-	list()#
+	            #feedback[[1]]		<-	c("company","director","investor","commission")#
+	            #feedback[[2]]		<-	c("iraq","oil")#
+	            #feedback[[3]]		<-	c("payments","reliability","regulators")#
+	            #feedback$indices	<-	c(1,1)#
+	            ##Output: must-cannot link constraints#
+		        ###Private helper function for unique pair generation #
+		        expand.grid.unique <- function(x, y, include.equals=FALSE){#
+						    			x <- unique(x)#
+										y <- unique(y)#
+    									g <- function(i){#
+        									z <- setdiff(y, x[seq_len(i-include.equals)])#
+										if(length(z)) cbind(x[i], z, deparse.level=0)#
+    									}#
+#
+    									do.call(rbind, lapply(seq_along(x), g))#
+									}#
+				###Private helper processing function for pair output				#
+				getPairs				<- function(pair,feedback){#
+										##Input: pair object as described above#
+										##Output: data frame of must, cannot link constraints and some other info of potential use#
+										###Private helper function for some processing#
+										process	<- function(words,zs){#
+													##Input: words, topic assignments for words#
+													##Output: data frame of information, CAUTION: generates all n^2 pairs, not n choose 2 as it#
+													###should. To add utility to do that as needed.#
+													out			<-	cbind(words,zs)#
+			 										names(out)	<- c("word_1","word_2","z_1","z_2")	#
+			 										out$link	<- rep("",nrow(out))#
+													out$link	<- ifelse(out$z_1==out$z_2,"must","cannot")#
+													return(out)#
+										}#
+#
+										if(missing(feedback)){#
+										zPairsAccross		<-	expand.grid(pair$assignments[[1]],pair$assignments[[2]])#
+	           							zPairsWithin_1		<-	expand.grid(pair$assignments[[1]],pair$assignments[[1]])#
+	          							zPairsWithin_2		<-	expand.grid(pair$assignments[[2]],pair$assignments[[2]])#
+#
+										wordPairsAccross	<-	expand.grid(pair$strings[[1]],pair$strings[[2]])#
+										wordPairsWithin_1	<-	expand.grid(pair$strings[[1]],pair$strings[[1]])#
+										wordPairsWithin_2	<-	expand.grid(pair$strings[[2]],pair$strings[[2]])#
+										out1				<-	process(wordPairsAccross, zPairsAccross)#
+										out1$indices	<-	rep(paste(pair$indices,collapse=","),nrow(out1))#
+										out2				<-	process(wordPairsWithin_1, zPairsWithin_1)#
+										out2$indices		<-	rep(paste(rep(pair$indices[1],2),collapse=","),nrow(out2))#
+										out3				<-	process(wordPairsWithin_2, zPairsWithin_2)#
+										out3$indices		<-	rep(paste(rep(pair$indices[2],2),collapse=","),nrow(out3))#
+										out				<-  rbind.data.frame(out1,out2,out3)#
+										out#
+										}#
+										if(!missing(feedback)){#
+										within			<-	do.call("rbind",lapply(feedback,function(x){#
+																out			<-	expand.grid(x,x)#
+																names(out)	<- 	c("word_1","word_2")#
+																out$link		<-	rep("must",nrow(out))#
+																out#
+																})#
+																)#
+										accross			<- do.call("rbind",apply(t(combn(1:length(feedback),2)),1,function(x){#
+														    		out	<-	expand.grid(feedback[[x[1]]],feedback[[x[2]]])#
+														    		names(out)	<- 	c("word_1","word_2")#
+																out$link		<-	rep("cannot",nrow(out))	#
+											   					out#
+																})#
+														    		)#
+										out				<-	rbind(within,accross)#
+										out$indices		<-	rep(paste(feedback$indices,collapse=","),nrow(out))#
+										out	#
+										}#
+										return(out)	#
+#
+										}#
+	            if(missing(feedback)){#
+	            out		<-	 getPairs(pair)#
+	            out		#
+				}#
+				if(!missing(feedback)){#
+				out		<-	 getPairs(pair,feedback)#
+	            out		#
+				}#
+				return(out)#
+	            }#
+if(TRUE){	            #
+#example:#
+**## Not run:** #
+ source("simulation.R")#
+ sim		<-	 generator("../../data/20ngr8.txt",10,.5,.1)#
+ pair				<-	 list()#
+ pair$indices		<-   c(1,3)#
+ pair$strings[[1]]	<-	strsplit(sim$documents[[1]]," ")[[1]]#
+ pair$strings[[2]]	<-	strsplit(sim$documents[[3]]," ")[[1]]#
+ pair$assignments[[1]]	<-	sim$targetAssignments[[1]]#
+ pair$assignments[[2]]	<-	sim$targetAssignments[[3]]#
+				# ###Feedback is a list as long as the number of groups of pairs. Within pair groups must link, accross group pairs cannot link.#
+	            # ##Example feedback with 3 groups#
+ feedback			<-	list()#
+ feedback[[1]]		<-	c("company","director","investor","commission")#
+ feedback[[2]]		<-	c("iraq","oil")#
+ feedback[[3]]		<-	c("payments","reliability","regulators")#
+ feedback$indices	<-	c(1,1)#
+ head(getConstraints(pair))#
+ head(getConstraints(pair,feedback))#
+## End(**Not run**)#
+}
+constraints <- getConstraints(pair)
+rm(list=ls())#
+source("interaction_matrix.r")#
+source("simulation.R")#
+source("gibbs.r")#
+D <- 50#
+V <- 25#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 25#
+#
+dataset <- generator.synthetic(D, V, K, alpha, eta, lambda)#
+#
+#constraint.matrix <- subsample.constraints(all.true.constraints, 150)#
+#
+corpus <- lexicalize(unlist(dataset$documents))#
+model <- lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, 150, alpha, eta)
+rm(list=ls())#
+require(lda)#
+source("interaction_matrix.r")#
+source("simulation.R")#
+source("gibbs.r")#
+D <- 50#
+V <- 25#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 25#
+#
+dataset <- generator.synthetic(D, V, K, alpha, eta, lambda)#
+#
+#constraint.matrix <- subsample.constraints(all.true.constraints, 150)#
+#
+corpus <- lexicalize(unlist(dataset$documents))#
+model <- lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, 150, alpha, eta)
+devtools::install_github("hadley/lineprof")
+install.packages("devtools")
+devtools::install_github("hadley/lineprof")
+require(lineprof)
+lineprof( for(i in 1:10000){ j <- j+i})
+lineprof( for(i in 1:10000){ print(i)})
+l <- lineprof( for(i in 1:10000){ print(i)})
+l
+require(shiny)
+shine(l)
+av <- c(1, 2, 5)
+av^2
+require("hyperSpec")
+vignette ("introduction")
+require("MASS")
+chondro
+pcov <- pooled.cov(chondro, chondro$clusters)
+rnd <- rmmvnorm(rep (10, 3), mean=pcov$mean, sigma=pcov$COV)
+rnd
+clusters.cols <- c("dark blue", "orange", "#C02020")
+plot(rnd, col=clusters.cols[rnd$.group])
+flu
+plot (flu, col="gray")
+plot (flu[1:3], add=TRUE)
+plot (flu, col="gray")
+plot (flu[1:3], add=TRUE)
+sample(chondro, 3)
+install.packages("RcppParallel")
+sample(10)
+require(ggplot2)#
+#
+folders <- list.files(path=paste(getwd(), "/uniform_results", sep=""))#
+#
+for(folder in folders){#
+	ind		<-	as.integer(unlist(strsplit(folder, "_")))#
+	dim		<-	ind[1]#
+	steps	<-	ind[2]#
+	budget	<-	ind[3]#
+	iters	<-	ind[4]#
+	setwd(path=paste(getwd(), "/uniform_results/", folder, sep=""))#
+	files 	<- list.files()#
+	for(file in files){#
+		ind_	<-	unlist(strsplit(file, "_"))#
+		epsilon	<-	as.double(ind_[2])#
+		delta	<-	as.double(ind_[3])#
+		gg_df	<-	read.table(file)#
+		ggplot(gg_df, aes(x=Queries, y=Error, group=Strategy)) + geom_line(aes(color=Strategy)) + scale_y_continuous(trans='log10', limits=c(NA,1), labels=percent)#
+	}#
+}
+ggplot(gg_df, aes(x=Queries, y=Error, group=Strategy)) + geom_line(aes(color=Strategy)) + scale_y_continuous(trans='log10', limits=c(NA,1), labels=percent);
+folders <- list.files(path=paste(getwd(), "/uniform_results", sep=""))
+for(folder in folders){#
+	ind		<-	as.integer(unlist(strsplit(folder, "_")))#
+	dim		<-	ind[1]#
+	steps	<-	ind[2]#
+	budget	<-	ind[3]#
+	iters	<-	ind[4]#
+	setwd(path=paste(getwd(), "/uniform_results/", folder, sep=""))#
+	files 	<- list.files()#
+	for(file in files){#
+		ind_	<-	unlist(strsplit(file, "_"))#
+		epsilon	<-	as.double(ind_[2])#
+		delta	<-	as.double(ind_[3])#
+		gg_df	<-	read.table(file)#
+		ggplot(gg_df, aes(x=Queries, y=Error, group=Strategy)) + geom_line(aes(color=Strategy)) + scale_y_continuous(trans='log10', limits=c(NA,1), labels=percent);#
+	}#
+}
+folders
+require(Rcpp)
+require(RcppEigen)
+R.home()
+require(Matrix)#
+#
+N <- 50000#
+#
+p <- 0.25#
+#
+n <- floor(p*50000)#
+k <- 5#
+i <- sample.int(N, n^2, replace=TRUE)#
+j <- sample.int(N, n^2, replace=TRUE)#
+#
+sparse_mat			<-	sparseMatrix(i,j, dims=c(N,N))#
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]#
+#
+current_size		<-	N#
+while(current_size > k){#
+	print(current_size)#
+	remaining_indices_to_delete	<-	setdiff(c(1:current_size), indices_to_keep)#
+	num.to.delete		<-	sample(length(remaining_indices_to_delete), 1)#
+	indices_to_delete	<-	sample(remaining_indices_to_delete, num.to.delete)#
+	sparse_mat			<-	sparse_mat[-indices_to_delete, -indices_to_delete]#
+	indices_to_keep		<-	sapply(indices_to_keep, function(x) x - sum(indices_to_delete < x), USE.NAMES=FALSE)#
+}
+require(Matrix)#
+#
+N <- 50000#
+#
+p <- 0.25#
+#
+n <- floor(p*50000)#
+k <- 5#
+i <- sample.int(N, n^2, replace=TRUE)#
+j <- sample.int(N, n^2, replace=TRUE)#
+#
+sparse_mat			<-	sparseMatrix(i,j, dims=c(N,N))#
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]#
+#
+current_size		<-	N#
+while(current_size > k){#
+	print(current_size)#
+	remaining_indices_to_delete	<-	setdiff(c(1:current_size), indices_to_keep)#
+	num.to.delete		<-	sample(length(remaining_indices_to_delete), 1)#
+	indices_to_delete	<-	sample(remaining_indices_to_delete, num.to.delete)#
+	sparse_mat			<-	sparse_mat[-indices_to_delete, -indices_to_delete]#
+	indices_to_keep		<-	sapply(indices_to_keep, function(x) x - sum(indices_to_delete < x), USE.NAMES=FALSE)#
+	current_size		<-	current_size - num.to.delete#
+}
+target_mat
+sparse_mat
+require(Matrix)#
+#
+N <- 50000#
+#
+p <- 0.25#
+#
+n <- floor(p*50000)#
+k <- 5#
+i <- sample.int(N, n^2, replace=TRUE)#
+j <- sample.int(N, n^2, replace=TRUE)#
+#
+sparse_mat			<-	sparseMatrix(i,j, dims=c(N,N))#
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+current_size		<-	N#
+while(current_size > k){#
+	print(current_size)#
+	remaining_indices_to_delete	<-	setdiff(c(1:current_size), indices_to_keep)#
+	num.to.delete		<-	sample(length(remaining_indices_to_delete), 1)#
+	indices_to_delete	<-	sample(remaining_indices_to_delete, num.to.delete)#
+	sparse_mat			<-	sparse_mat[-indices_to_delete, -indices_to_delete]#
+	indices_to_keep		<-	sapply(indices_to_keep, function(x) x - sum(indices_to_delete < x), USE.NAMES=FALSE)#
+	current_size		<-	current_size - num.to.delete#
+}
+sparse_mat
+target_mat
+target_mat[-c(3,1),-c(3,1)]
+target_mat[-c(4,1),-c(4,1)]
+target_mat[-c(5,1),-c(5,1)]
+require(Matrix)#
+#
+N <- 50000#
+#
+p <- 0.25#
+#
+n <- floor(p*50000)#
+k <- 5#
+i <- sample.int(N, n^2, replace=TRUE)#
+j <- sample.int(N, n^2, replace=TRUE)#
+#
+sparse_mat			<-	sparseMatrix(i,j, dims=c(N,N))#
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat\
+target_mat
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+indices_to_keep		<-	sort(sample.int(N, k, replace=FALSE))#
+#
+target_mat			<-	sparse_mat[indices_to_keep, indices_to_keep]
+target_mat
+current_size		<-	N#
+while(current_size > k){#
+	print(current_size)#
+	remaining_indices_to_delete	<-	setdiff(c(1:current_size), indices_to_keep)#
+	num.to.delete		<-	sample(length(remaining_indices_to_delete), 1)#
+	indices_to_delete	<-	sample(remaining_indices_to_delete, num.to.delete)#
+	sparse_mat			<-	sparse_mat[-indices_to_delete, -indices_to_delete]#
+	indices_to_keep		<-	sapply(indices_to_keep, function(x) x - sum(indices_to_delete < x), USE.NAMES=FALSE)#
+	current_size		<-	current_size - num.to.delete#
+}
+target_mat
+sparse_mat
+require(Rcpp)#
+require(RcppEigen)
+sourceCpp("test.cpp")
+require(Rcpp)#
+require(RcppEigen)#
+require(Matrix)#
+sourceCpp("test.cpp")#
+N <- 3#
+X <- matrix(runif(N^2), ncol=N)#
+#
+V <- runif(N)#
+print(V)#
+print(X)
+setwd("/Users/cjtosh/Dropbox/InteractiveTopicModeling/experiments/InteractiveTools")
+require(Rcpp)
+require(RcppEigen)
+compileAttributes()

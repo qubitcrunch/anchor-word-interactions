@@ -1,0 +1,3 @@
+require(lda)
+lda.collapsed.gibbs.sampler
+collapsedGibbsSampler

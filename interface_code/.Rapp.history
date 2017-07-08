@@ -1,0 +1,1827 @@
+rm(list=ls())#
+require(lda)#
+# require(lineprof)#
+# require(shiny)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 20#
+V <- 100#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 15#
+num.iterations				<-	10#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs								<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs								<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control				<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+#
+system.time({print(normalized.assignment.distance(dataset$assignments, interactive.model.with.zs$assignments, num.constraints=num.consts))})[3]#
+#
+# l_prof <-lineprof({#
+	# interactive.model.with.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 1, alpha, eta, interactive.maps=int.maps.with.zs)		#
+# })#
+#
+for(t in 1:num.iterations){#
+	print(t)#
+	plain.errors[t]										<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+	interactive.errors.with.zs[t]						<-	normalized.assignment.distance(dataset$assignments, interactive.model.with.zs$assignments, num.constraints=num.consts)#
+	interactive.errors.without.zs[t]					<-	normalized.assignment.distance(dataset$assignments, interactive.model.without.zs$assignments, num.constraints=num.consts)#
+	interactive.errors.without.zs.edge.control[t]		<-	normalized.assignment.distance(dataset$assignments, interactive.model.without.zs.edge.control$assignments, num.constraints=num.consts)#
+	constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+	constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+	int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K, interactive.maps=int.maps.with.zs)#
+	int.maps.without.zs					<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, interactive.maps=int.maps.without.zs)#
+	int.maps.without.zs.edge.control	<-	add.constraints.and.create.initialization(interactive.model.without.zs.edge.control$assignments, constraint.matrix.minus.zs, K, interactive.maps=int.maps.without.zs.edge.control,edge.control=TRUE)#
+#
+	plain.model								<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+	interactive.model.with.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.with.zs)		#
+	interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs)		#
+	interactive.model.without.zs.edge.control	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+}#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2);
+R.Version()
+rm(list=ls())#
+require(lda)#
+# require(lineprof)#
+# require(shiny)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 20#
+V <- 100#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 15#
+num.iterations				<-	10#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs								<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs								<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control				<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+#
+## Set up parallelism.#
+no_cores	<-	detectCores()#
+cl			<-	makeCluster(no_cores)#
+registerDoSNOW(cl)#
+#
+model.list	<-	list()#
+model.list[[1]] <- list()#
+model.list[[2]] <- list()#
+model.list[[3]] <- list()#
+model.list[[4]] <- list()#
+#
+model.list[[1]]$model	<-	interactive.model.with.zs#
+model.list[[1]]$maps	<-	int.maps.with.zs#
+#
+model.list[[2]]$model	<-	interactive.model.without.zs#
+model.list[[2]]$maps	<-	int.maps.without.zs#
+model.list[[3]]$model	<-	interactive.model.without.zs.edge.control#
+model.list[[3]]$maps	<-	int.maps.without.zs.edge.control#
+model.list[[4]]$model	<-	interactive.model.without.zs.dropout#
+model.list[[4]]$maps	<-	int.maps.without.zs.dropout#
+#
+time.elapsed				<-	system.time({#
+	for(t in 1:num.iterations){#
+		print(t)	#
+		## First grab current errors.#
+		plain.errors[t]											<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+		interactive.errors.with.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[1]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[2]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.edge.control[t]			<-	normalized.assignment.distance(dataset$assignments, model.list[[3]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.dropout[t]					<-	normalized.assignment.distance(dataset$assignments, model.list[[4]]$model$assignments, num.constraints=num.consts)#
+		## Generate new set of constraints.#
+		constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+		constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+		model.list	<-	foreach(i=1:4, .packages=c('plyr','Matrix', 'hash', 'InteractiveTools')) %dopar% {#
+			result		<-	list()#
+			curr.maps	<-	model.list[[i]]$maps#
+			curr.model	<-	model.list[[i]]$model#
+			if(i==1){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix, K, interactive.maps=curr.maps)#
+			}#
+			else if(i==3){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps,edge.control=TRUE)#
+			}#
+			else{#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps)#
+			}#
+			result$model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=result$maps)#
+		}#
+		plain.model									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+		if((t %% 5) == 0){#
+			model.list[[4]]$maps <- drop.edges(model.list[[4]]$maps, 0.25)#
+		}#
+	}})[3]#
+## Shut down cluster#
+stopCluster(cl)#
+#
+cat("time elapsed: ", time.elapsed, "\n")#
+cat("corpus size: ", corpus.size, "\n")#
+cat("total number of possible constraints: ", num.consts, "\n")#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2);
+rm(list=ls())#
+require(lda)#
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 20#
+V <- 100#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 15#
+num.iterations				<-	10#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs								<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs								<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control				<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+#
+## Set up parallelism.#
+no_cores	<-	detectCores()#
+cl			<-	makeCluster(no_cores)#
+registerDoSNOW(cl)#
+#
+model.list	<-	list()#
+model.list[[1]] <- list()#
+model.list[[2]] <- list()#
+model.list[[3]] <- list()#
+model.list[[4]] <- list()#
+#
+model.list[[1]]$model	<-	interactive.model.with.zs#
+model.list[[1]]$maps	<-	int.maps.with.zs#
+#
+model.list[[2]]$model	<-	interactive.model.without.zs#
+model.list[[2]]$maps	<-	int.maps.without.zs#
+model.list[[3]]$model	<-	interactive.model.without.zs.edge.control#
+model.list[[3]]$maps	<-	int.maps.without.zs.edge.control#
+model.list[[4]]$model	<-	interactive.model.without.zs.dropout#
+model.list[[4]]$maps	<-	int.maps.without.zs.dropout#
+#
+time.elapsed				<-	system.time({#
+	for(t in 1:num.iterations){#
+		print(t)	#
+		## First grab current errors.#
+		plain.errors[t]											<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+		interactive.errors.with.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[1]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[2]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.edge.control[t]			<-	normalized.assignment.distance(dataset$assignments, model.list[[3]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.dropout[t]					<-	normalized.assignment.distance(dataset$assignments, model.list[[4]]$model$assignments, num.constraints=num.consts)#
+		## Generate new set of constraints.#
+		constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+		constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+		model.list	<-	foreach(i=1:4, .packages=c('plyr','Matrix', 'hash', 'InteractiveTools')) %dopar% {#
+			result		<-	list()#
+			curr.maps	<-	model.list[[i]]$maps#
+			curr.model	<-	model.list[[i]]$model#
+			if(i==1){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix, K, interactive.maps=curr.maps)#
+			}#
+			else if(i==3){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps,edge.control=TRUE)#
+			}#
+			else{#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps)#
+			}#
+			result$model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=result$maps)#
+		}#
+		plain.model									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+		if((t %% 5) == 0){#
+			model.list[[4]]$maps <- drop.edges(model.list[[4]]$maps, 0.25)#
+		}#
+	}})[3]#
+## Shut down cluster#
+stopCluster(cl)#
+#
+cat("time elapsed: ", time.elapsed, "\n")#
+cat("corpus size: ", corpus.size, "\n")#
+cat("total number of possible constraints: ", num.consts, "\n")#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2);
+rm(list=ls())#
+require(lda)#
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 20#
+V <- 100#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 15#
+num.iterations				<-	10#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+interactive.errors.without.zs.dropout			<-	rep(0, num.iterations)#
+#
+## Set up parallelism.#
+no_cores	<-	detectCores()#
+cl			<-	makeCluster(no_cores)#
+#
+registerDoSNOW(cl)#
+#
+model.list	<-	list()#
+model.list[[1]] <- list()#
+model.list[[2]] <- list()#
+model.list[[3]] <- list()#
+model.list[[4]] <- list()#
+#
+model.list[[1]]$model	<-	interactive.model.with.zs#
+model.list[[1]]$maps	<-	int.maps.with.zs#
+#
+model.list[[2]]$model	<-	interactive.model.without.zs#
+model.list[[2]]$maps	<-	int.maps.without.zs#
+model.list[[3]]$model	<-	interactive.model.without.zs.edge.control#
+model.list[[3]]$maps	<-	int.maps.without.zs.edge.control#
+model.list[[4]]$model	<-	interactive.model.without.zs.dropout#
+model.list[[4]]$maps	<-	int.maps.without.zs.dropout#
+#
+time.elapsed				<-	system.time({#
+	for(t in 1:num.iterations){#
+		print(t)	#
+		## First grab current errors.#
+		plain.errors[t]											<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+		interactive.errors.with.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[1]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[2]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.edge.control[t]			<-	normalized.assignment.distance(dataset$assignments, model.list[[3]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.dropout[t]					<-	normalized.assignment.distance(dataset$assignments, model.list[[4]]$model$assignments, num.constraints=num.consts)#
+		## Generate new set of constraints.#
+		constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+		constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+		model.list	<-	foreach(i=1:4, .packages=c('plyr','Matrix', 'hash', 'InteractiveTools')) %dopar% {#
+			result		<-	list()#
+			curr.maps	<-	model.list[[i]]$maps#
+			curr.model	<-	model.list[[i]]$model#
+			if(i==1){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix, K, interactive.maps=curr.maps)#
+			}#
+			else if(i==3){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps,edge.control=TRUE)#
+			}#
+			else{#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps)#
+			}#
+			result$model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=result$maps)#
+		}#
+		plain.model									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+		if((t %% 5) == 0){#
+			model.list[[4]]$maps <- drop.edges(model.list[[4]]$maps, 0.25)#
+		}#
+	}})[3]#
+## Shut down cluster#
+stopCluster(cl)#
+#
+cat("time elapsed: ", time.elapsed, "\n")#
+cat("corpus size: ", corpus.size, "\n")#
+cat("total number of possible constraints: ", num.consts, "\n")#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2);
+rm(list=ls())#
+require(lda)#
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 20#
+V <- 100#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 15#
+num.iterations				<-	10#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+interactive.errors.without.zs.dropout			<-	rep(0, num.iterations)#
+#
+## Set up parallelism.#
+no_cores	<-	detectCores()#
+cl			<-	makeCluster(no_cores)#
+#
+registerDoSNOW(cl)#
+#
+model.list	<-	list()#
+model.list[[1]] <- list()#
+model.list[[2]] <- list()#
+model.list[[3]] <- list()#
+model.list[[4]] <- list()#
+#
+model.list[[1]]$model	<-	interactive.model.with.zs#
+model.list[[1]]$maps	<-	int.maps.with.zs#
+#
+model.list[[2]]$model	<-	interactive.model.without.zs#
+model.list[[2]]$maps	<-	int.maps.without.zs#
+model.list[[3]]$model	<-	interactive.model.without.zs.edge.control#
+model.list[[3]]$maps	<-	int.maps.without.zs.edge.control#
+model.list[[4]]$model	<-	interactive.model.without.zs.dropout#
+model.list[[4]]$maps	<-	int.maps.without.zs.dropout#
+#
+time.elapsed				<-	system.time({#
+	for(t in 1:num.iterations){#
+		print(t)	#
+		## First grab current errors.#
+		plain.errors[t]											<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+		interactive.errors.with.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[1]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[2]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.edge.control[t]			<-	normalized.assignment.distance(dataset$assignments, model.list[[3]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.dropout[t]					<-	normalized.assignment.distance(dataset$assignments, model.list[[4]]$model$assignments, num.constraints=num.consts)#
+		## Generate new set of constraints.#
+		constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+		constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+		model.list	<-	foreach(i=1:4, .packages=c('plyr','Matrix', 'hash', 'InteractiveTools')) %do% {#
+			result		<-	list()#
+			curr.maps	<-	model.list[[i]]$maps#
+			curr.model	<-	model.list[[i]]$model#
+			if(i==1){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix, K, interactive.maps=curr.maps)#
+			}#
+			else if(i==3){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps,edge.control=TRUE)#
+			}#
+			else{#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps)#
+			}#
+			result$model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=result$maps)#
+		}#
+		plain.model									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+		if((t %% 5) == 0){#
+			model.list[[4]]$maps <- drop.edges(model.list[[4]]$maps, 0.25)#
+		}#
+	}})[3]#
+## Shut down cluster#
+stopCluster(cl)#
+#
+cat("time elapsed: ", time.elapsed, "\n")#
+cat("corpus size: ", corpus.size, "\n")#
+cat("total number of possible constraints: ", num.consts, "\n")#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2);
+rm(list=ls())#
+require(lda)#
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 20#
+V <- 100#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 15#
+num.iterations				<-	10#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+interactive.errors.without.zs.dropout			<-	rep(0, num.iterations)#
+#
+## Set up parallelism.#
+no_cores	<-	detectCores()#
+cl			<-	makeCluster(no_cores)#
+#
+registerDoSNOW(cl)#
+#
+model.list	<-	list()#
+model.list[[1]] <- list()#
+model.list[[2]] <- list()#
+model.list[[3]] <- list()#
+model.list[[4]] <- list()#
+#
+model.list[[1]]$model	<-	interactive.model.with.zs#
+model.list[[1]]$maps	<-	int.maps.with.zs#
+#
+model.list[[2]]$model	<-	interactive.model.without.zs#
+model.list[[2]]$maps	<-	int.maps.without.zs#
+model.list[[3]]$model	<-	interactive.model.without.zs.edge.control#
+model.list[[3]]$maps	<-	int.maps.without.zs.edge.control#
+model.list[[4]]$model	<-	interactive.model.without.zs.dropout#
+model.list[[4]]$maps	<-	int.maps.without.zs.dropout#
+#
+time.elapsed				<-	system.time({#
+	for(t in 1:num.iterations){#
+		print(t)	#
+		## First grab current errors.#
+		plain.errors[t]											<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+		interactive.errors.with.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[1]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[2]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.edge.control[t]			<-	normalized.assignment.distance(dataset$assignments, model.list[[3]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.dropout[t]					<-	normalized.assignment.distance(dataset$assignments, model.list[[4]]$model$assignments, num.constraints=num.consts)#
+		## Generate new set of constraints.#
+		constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+		constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+		model.list	<-	foreach(i=1:4, .packages=c('plyr','Matrix', 'hash', 'InteractiveTools')) %dopar% {#
+			result		<-	list()#
+			curr.maps	<-	model.list[[i]]$maps#
+			curr.model	<-	model.list[[i]]$model#
+			if(i==1){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix, K, interactive.maps=curr.maps)#
+			}#
+			else if(i==3){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps,edge.control=TRUE)#
+			}#
+			else{#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps)#
+			}#
+			result$model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=result$maps)#
+			result#
+		}#
+		plain.model									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+		if((t %% 5) == 0){#
+			model.list[[4]]$maps <- drop.edges(model.list[[4]]$maps, 0.25)#
+		}#
+	}})[3]#
+## Shut down cluster#
+stopCluster(cl)#
+#
+cat("time elapsed: ", time.elapsed, "\n")#
+cat("corpus size: ", corpus.size, "\n")#
+cat("total number of possible constraints: ", num.consts, "\n")#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2);
+rm(list=ls())#
+require(lda)#
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 20#
+V <- 100#
+K <- 5#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 15#
+num.iterations				<-	100#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+interactive.errors.without.zs.dropout			<-	rep(0, num.iterations)#
+#
+## Set up parallelism.#
+no_cores	<-	detectCores()#
+cl			<-	makeCluster(no_cores)#
+#
+registerDoSNOW(cl)#
+#
+model.list	<-	list()#
+model.list[[1]] <- list()#
+model.list[[2]] <- list()#
+model.list[[3]] <- list()#
+model.list[[4]] <- list()#
+#
+model.list[[1]]$model	<-	interactive.model.with.zs#
+model.list[[1]]$maps	<-	int.maps.with.zs#
+#
+model.list[[2]]$model	<-	interactive.model.without.zs#
+model.list[[2]]$maps	<-	int.maps.without.zs#
+model.list[[3]]$model	<-	interactive.model.without.zs.edge.control#
+model.list[[3]]$maps	<-	int.maps.without.zs.edge.control#
+model.list[[4]]$model	<-	interactive.model.without.zs.dropout#
+model.list[[4]]$maps	<-	int.maps.without.zs.dropout#
+#
+time.elapsed				<-	system.time({#
+	for(t in 1:num.iterations){#
+		print(t)	#
+		## First grab current errors.#
+		plain.errors[t]											<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+		interactive.errors.with.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[1]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[2]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.edge.control[t]			<-	normalized.assignment.distance(dataset$assignments, model.list[[3]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.dropout[t]					<-	normalized.assignment.distance(dataset$assignments, model.list[[4]]$model$assignments, num.constraints=num.consts)#
+		## Generate new set of constraints.#
+		constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+		constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+		model.list	<-	foreach(i=1:4, .packages=c('plyr','Matrix', 'hash', 'InteractiveTools')) %dopar% {#
+			result		<-	list()#
+			curr.maps	<-	model.list[[i]]$maps#
+			curr.model	<-	model.list[[i]]$model#
+			if(i==1){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix, K, interactive.maps=curr.maps)#
+			}#
+			else if(i==3){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps,edge.control=TRUE)#
+			}#
+			else{#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps)#
+			}#
+			result$model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=result$maps)#
+			result#
+		}#
+		plain.model									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+		if((t %% 5) == 0){#
+			model.list[[4]]$maps <- drop.edges(model.list[[4]]$maps, 0.25)#
+		}#
+	}})[3]#
+## Shut down cluster#
+stopCluster(cl)#
+#
+cat("time elapsed: ", time.elapsed, "\n")#
+cat("corpus size: ", corpus.size, "\n")#
+cat("total number of possible constraints: ", num.consts, "\n")#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2);
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control, interactive.errors.without.zs.dropout)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control, interactive.errors.without.zs.dropout)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(interactive.errors.without.zs.dropout, type="o", pch=22, lty=2, col="purple")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Interactive Algorithm with Dropout", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "purple", "red"), pch=21:22, lty=1:2);
+rm(list=ls())#
+require(lda)#
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+D <- 50#
+V <- 100#
+K <- 15#
+alpha <- 0.5#
+eta <- 0.5#
+lambda <- 25#
+num.iterations				<-	100#
+gibbs.steps					<-	5#
+word.num					<-	15#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+corpus 					<-	lexicalize(unlist(dataset$documents))#
+num.consts				<-	choose(corpus.size, 2)#
+#
+print("initializations")#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)#
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)#
+plain.errors									<-	rep(0, num.iterations)#
+interactive.errors.with.zs						<-	rep(0, num.iterations)#
+interactive.errors.without.zs					<-	rep(0, num.iterations)#
+interactive.errors.without.zs.edge.control		<-	rep(0, num.iterations)#
+interactive.errors.without.zs.dropout			<-	rep(0, num.iterations)#
+#
+## Set up parallelism.#
+no_cores	<-	detectCores()#
+cl			<-	makeCluster(no_cores)#
+#
+registerDoSNOW(cl)#
+#
+model.list	<-	list()#
+model.list[[1]] <- list()#
+model.list[[2]] <- list()#
+model.list[[3]] <- list()#
+model.list[[4]] <- list()#
+#
+model.list[[1]]$model	<-	interactive.model.with.zs#
+model.list[[1]]$maps	<-	int.maps.with.zs#
+#
+model.list[[2]]$model	<-	interactive.model.without.zs#
+model.list[[2]]$maps	<-	int.maps.without.zs#
+model.list[[3]]$model	<-	interactive.model.without.zs.edge.control#
+model.list[[3]]$maps	<-	int.maps.without.zs.edge.control#
+model.list[[4]]$model	<-	interactive.model.without.zs.dropout#
+model.list[[4]]$maps	<-	int.maps.without.zs.dropout#
+#
+time.elapsed				<-	system.time({#
+	for(t in 1:num.iterations){#
+		print(t)	#
+		## First grab current errors.#
+		plain.errors[t]											<-	normalized.assignment.distance(dataset$assignments, plain.model$assignments, num.constraints=num.consts)#
+		interactive.errors.with.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[1]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs[t]							<-	normalized.assignment.distance(dataset$assignments, model.list[[2]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.edge.control[t]			<-	normalized.assignment.distance(dataset$assignments, model.list[[3]]$model$assignments, num.constraints=num.consts)#
+		interactive.errors.without.zs.dropout[t]					<-	normalized.assignment.distance(dataset$assignments, model.list[[4]]$model$assignments, num.constraints=num.consts)#
+		## Generate new set of constraints.#
+		constraint.matrix				<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+		constraint.matrix.minus.zs		<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+		model.list	<-	foreach(i=1:4, .packages=c('plyr','Matrix', 'hash', 'InteractiveTools')) %dopar% {#
+			result		<-	list()#
+			curr.maps	<-	model.list[[i]]$maps#
+			curr.model	<-	model.list[[i]]$model#
+			if(i==1){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix, K, interactive.maps=curr.maps)#
+			}#
+			else if(i==3){#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps,edge.control=TRUE)#
+			}#
+			else{#
+				result$maps	<-	add.constraints.and.create.initialization(curr.model$assignments, constraint.matrix.minus.zs, K, interactive.maps=curr.maps)#
+			}#
+			result$model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=result$maps)#
+			result#
+		}#
+		plain.model			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta, initial=list(assignments=plain.model$assignments))#
+		if((t %% 5) == 0){#
+			model.list[[4]]$maps <- drop.edges(model.list[[4]]$maps, 0.25)#
+		}#
+	}})[3]#
+## Shut down cluster#
+stopCluster(cl)#
+#
+cat("time elapsed: ", time.elapsed, "\n")#
+cat("corpus size: ", corpus.size, "\n")#
+cat("total number of possible constraints: ", num.consts, "\n")#
+miny = min(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control, interactive.errors.without.zs.dropout)#
+maxy = max(plain.errors, interactive.errors.with.zs, interactive.errors.without.zs, interactive.errors.without.zs.edge.control, interactive.errors.without.zs.dropout)#
+#
+plot(interactive.errors.with.zs, type="n", xaxt="n", yaxt="n", ylim=c(miny,maxy))#
+#
+leg.object <-  legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "red"), pch=21:22, lty=1:2, plot=FALSE)#
+#
+miny = 1.04 * (miny - leg.object$rect$h)#
+#
+# # Create box around plot box()#
+plot(interactive.errors.with.zs, type="o", col="blue",ann=FALSE, ylim=c(miny,maxy))#
+#
+lines(interactive.errors.without.zs, type="o", pch=22, lty=2, col="green")#
+lines(interactive.errors.without.zs.edge.control, type="o", pch=22, lty=2, col="darkorange")#
+lines(interactive.errors.without.zs.dropout, type="o", pch=22, lty=2, col="purple")#
+lines(plain.errors, type="o", pch=22, lty=2, col="red")#
+# Create a title with a red, bold/italic font#
+mytitle	<-	#
+TeX(paste("Settings:", paste(#
+sprintf("$\\lambda = %g$", lambda),#
+sprintf("$\\alpha = %g$", alpha),#
+sprintf("$\\eta = %g$", eta)#
+),#
+paste(#
+sprintf("$D = %g$", D),#
+sprintf("$V = %g$", V),#
+sprintf("$K = %g$", K)#
+),collapse=" ")#
+)#
+#
+title(main=mytitle, col.main="red", font.main=4)#
+# # Label the x and y axes with dark green text#
+ title(xlab="Interactions", col.lab=rgb(0,0.5,0))#
+ title(ylab="Constraint distance", col.lab=rgb(0,0.5,0))#
+#
+# # Create a legend at (1, g_range[2]) that is slightly smaller #
+# # (cex) and uses the same line colors and points used by #
+# # the actual plots #
+legend("bottomleft", c("Interactive Algorithm with Z's", "Interactive Algorithm without Z's", "Interactive Algorithm with Edge Control", "Interactive Algorithm with Dropout", "Vanilla LDA"), cex=0.8,col=c("blue", "green", "darkorange", "purple", "red"), pch=21:22, lty=1:2);
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(lda)
+#V= 500;D=200;lambda<-50;alpha=.5;eta=.01
+V= 500;D=200;lambda<-50;alpha=.5;eta=.01
+V= 5000;D=200;lambda<-50;alpha=.5;eta=.01;K=20
+print(lambda)#
+print(alpha)#
+print(eta)#
+print(D)#
+print(V)#
+print(K)#
+#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("../simulation.R")
+source("simulation.R")
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+num.consts				<-	choose(corpus.size, 2)#
+#
+num.iterations				<-	10#
+gibbs.steps					<-	100#
+word.num					<-	10#
+#
+#########Processing-Initializations###################
+print("initializations")#
+corpus 											<-	lexicalize(unlist(dataset$documents))#
+#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)
+require(lineprof)
+l.1<-lineprof(add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K))
+l.1
+l.1<-lineprof(add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K))#
+l.2<-lineprof(add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K))#
+l.3<-lineprof(	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE))#
+l.4<-lineprof(add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K))
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)
+V= 5000;D=20;lambda<-10;alpha=.5;eta=.01;K=20
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(lda)
+print(lambda)#
+print(alpha)#
+print(eta)#
+print(D)#
+print(V)#
+print(K)#
+#
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")#
+#
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+num.consts				<-	choose(corpus.size, 2)#
+#
+num.iterations				<-	10#
+gibbs.steps					<-	100#
+word.num					<-	10#
+#
+#########Processing-Initializations###################
+print("initializations")#
+corpus 											<-	lexicalize(unlist(dataset$documents))
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)
+V= 5000;D=50;lambda<-20;alpha=.5;eta=.01;K=20
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+num.consts				<-	choose(corpus.size, 2)#
+#
+num.iterations				<-	10#
+gibbs.steps					<-	100#
+word.num					<-	10#
+#
+#########Processing-Initializations###################
+print("initializations")#
+corpus 											<-	lexicalize(unlist(dataset$documents))
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)#
+interactive.model.without.zs					<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs)#
+interactive.model.without.zs.edge.control		<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.edge.control)#
+interactive.model.without.zs.dropout			<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.without.zs.dropout)
+V= 5000;D=100;lambda<-20;alpha=.5;eta=.01;K=20
+print("generating data")#
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+num.consts				<-	choose(corpus.size, 2)#
+#
+num.iterations				<-	10#
+gibbs.steps					<-	100#
+word.num					<-	10#
+#
+#########Processing-Initializations###################
+print("initializations")#
+corpus 											<-	lexicalize(unlist(dataset$documents))#
+#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]#
+#
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)
+V= 5000;D=200;lambda<-50;alpha=.5;eta=.01;K=20
+dataset 				<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size				<-	sum(dataset$doc_lengths)#
+num.consts				<-	choose(corpus.size, 2)#
+#
+num.iterations				<-	10#
+gibbs.steps					<-	100#
+word.num					<-	10#
+#
+#########Processing-Initializations###################
+print("initializations")#
+corpus 											<-	lexicalize(unlist(dataset$documents))#
+#
+plain.model 									<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.with.zs						<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs					<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.edge.control		<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+interactive.model.without.zs.dropout			<-	lda.collapsed.gibbs.sampler(corpus$documents, K, corpus$vocab, gibbs.steps, alpha, eta)#
+#
+constraint.matrix								<-	sample.doc.buckets.constraints.hard(dataset$assignments, word.num, dataset$doc_lengths)#
+constraint.matrix.minus.zs						<-	constraint.matrix[,c("word_1", "word_2", "doc_1", "doc_2", "link")]
+int.maps.with.zs						<-	add.constraints.and.create.initialization(interactive.model.with.zs$assignments, constraint.matrix, K)#
+int.maps.without.zs						<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K)#
+int.maps.without.zs.edge.control		<-	add.constraints.and.create.initialization(interactive.model.without.zs$assignments, constraint.matrix.minus.zs, K, edge.control=TRUE)#
+int.maps.without.zs.dropout				<-	add.constraints.and.create.initialization(interactive.model.without.zs.dropout$assignments, constraint.matrix.minus.zs, K)
+interactive.model.with.zs						<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents, K, corpus$vocab, 10, alpha, eta, interactive.maps=int.maps.with.zs)
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(lda)
+add.constraints.and.create.initialization
+require(foreach)#
+require(parallel)#
+require(doSNOW)#
+require(latex2exp)#
+require(lda)
+require(plyr)#
+require(Matrix)#
+require(hash)#
+require(InteractiveTools)#
+source("simulation.R")
+add.constraints.and.create.initialization
+add.constraints.and.create.initialization.without.zs
+require(Rcpp)
+require(RcppEigen)
+setwd("../")
+setwd("../..")
+getwd()
+setwd("desktop")
+ls
+install.packages("InteractiveTools", repos = NULL, type="source")
+require(InteractiveTools)
+setwd("../Dropbox/InteractiveTopicModeling/experiments/interface_code/")
+require(tm)#
+require(lda)#
+require(foreach)#
+require(stringr)#
+require(RJSONIO)#
+require(slam)#
+require(glmnet)#
+#
+myfiles	<-	list.files("../../data/news_sources")#
+##choose wp #
+dataset	<-	myfiles[5]
+asSparseMatrix = function (simpleTripletMatrix) {#
+  retVal = sparseMatrix(i=simpleTripletMatrix[["i"]],#
+                        j=simpleTripletMatrix[["j"]],#
+                        x=simpleTripletMatrix[["v"]],#
+                        dims=c(simpleTripletMatrix[["nrow"]],#
+                               simpleTripletMatrix[["ncol"]]))#
+  if (!is.null(simpleTripletMatrix[["dimnames"]]))#
+    dimnames(retVal) = simpleTripletMatrix[["dimnames"]]#
+  return(retVal)#
+}
+## Start in InterfaceCode folder.#
+require(tm)#
+require(lda)#
+require(foreach)#
+require(stringr)#
+require(RJSONIO)#
+require(slam)#
+require(glmnet)#
+#
+myfiles	<-	list.files("../../data/news_sources")#
+##choose wp #
+dataset	<-	myfiles[5]#
+lines	<-	readLines(paste0("../../data/news_sources/",dataset))#
+urls			<-	foreach(i=1:length(lines),.combine="c")%do%{#
+						print(i)#
+					line	<-	try(fromJSON(lines[i])$url,silent=TRUE)#
+					if(class(line)=="try-error"){#
+						out	<- "error"#
+					}#
+					else{#
+						out	<-	line#
+					}#
+					out#
+				} #
+docs			<-	foreach(i=1:length(lines),.combine="c")%do%{#
+						print(i)#
+					line	<-	try(paste(fromJSON(lines[i])$words,collapse=" "),silent=TRUE)#
+					if(class(line)=="try-error"){#
+						out	<- "error"#
+					}#
+					else{#
+						out	<-	line#
+					}#
+					out#
+				} #
+#
+labels	<-	sapply(urls,function(x){#
+			split_x	<-	strsplit(x,"/")[[1]]#
+			want	<-	which(split_x =="news")+1#
+			split_x[want]#
+			}#
+			)#
+#
+news_ind	<-	which(unlist(lapply(labels,length),use.names=FALSE)>0)#
+#
+docs_clean		<-	docs[news_ind]#
+tdm				<-	DocumentTermMatrix(Corpus(VectorSource(docs_clean)))#
+tdm				<-	tdm[which(col_sums(tdm)>=1),]#
+X				<-	asSparseMatrix(tdm)#
+Y				<-	unlist(labels[news_ind],use.names=FALSE)#
+#
+train_sample	<-	sample(nrow(X),1000)#
+Y_train			<-	Y[train_sample]#
+X_train			<-	X[train_sample,]#
+#
+not_wants		<-	unlist(sapply(names(which(table(Y_train)<10)),function(x){which(Y_train==x)}),use.names=FALSE)#
+X_train			<-	X_train[-not_wants,]#
+Y_train			<-	Y_train[-not_wants]#
+model			<-	cv.glmnet(X_train,Y_train,family="multinomial")#
+#
+wordCoefs			<-	data.frame(sapply(1:length(unique(Y_train)),function(x)(sort(coef(model,s=model$lambda.min)[[x]][,1][-1],decreasing=TRUE))))#
+wordList			<-	data.frame(sapply(1:length(unique(Y_train)),function(x)names(sort(coef(model,model$lambda.min)[[x]][,1][-1],decreasing=TRUE))))#
+names(wordList)		<-	names(coef(model))#
+names(wordCoefs)	<-	names(coef(model))
+dim(X_train)
+length(wordList)
+wordList[[1]][1:100]
+names(wordList)[1]
+table(Y_train)
+wordList[[which(names(wordList)=="football-insider")]][1:10]
+dim(X)
+tdm				<-	DocumentTermMatrix(Corpus(VectorSource(docs_clean)))
+dim(tdm)
+tdm				<-	tdm[,which(col_sums(tdm)>=2)]
+tdm				<-	DocumentTermMatrix(Corpus(VectorSource(docs_clean)))
+which(col_sums(tdm)>=2)
+unname(which(col_sums(tdm)>=2))
+tdm				<-	tdm[,-unname(which(col_sums(tdm)>=2))]
+dim(tdm)
+tdm				<-	DocumentTermMatrix(Corpus(VectorSource(docs_clean)))
+colnames(tdm)[1]
+class(colnames(tdm))
+tdm				<-	tdm[,unname(which(col_sums(tdm)>=10))]
+dim(tdm)
+X				<-	asSparseMatrix(tdm)
+Y				<-	unlist(labels[news_ind],use.names=FALSE)
+train_sample	<-	sample(nrow(X),rnow(X))
+train_sample	<-	sample(nrow(X),nrow(X))
+Y_train			<-	Y[train_sample]#
+X_train			<-	X[train_sample,]
+dim(X_train)
+not_wants		<-	unlist(sapply(names(which(table(Y_train)<10)),function(x){which(Y_train==x)}),use.names=FALSE)
+not_wants
+X_train			<-	X_train[-not_wants,]#
+Y_train			<-	Y_train[-not_wants]
+table(Y_train)
+Y_train			<-	Y[train_sample]#
+X_train			<-	X[train_sample,]
+not_wants		<-	unlist(sapply(names(which(table(Y_train)<20)),function(x){which(Y_train==x)}),use.names=FALSE)
+not_wants
+X_train			<-	X_train[-not_wants,]#
+Y_train			<-	Y_train[-not_wants]#
+model			<-	cv.glmnet(X_train,Y_train,family="multinomial")
+warnings()
+names(coef(model))
+wordCoefs			<-	data.frame(sapply(1:length(unique(Y_train)),function(x)(sort(coef(model,s=model$lambda.min)[[x]][,1][-1],decreasing=TRUE))))#
+wordList			<-	data.frame(sapply(1:length(unique(Y_train)),function(x)names(sort(coef(model,model$lambda.min)[[x]][,1][-1],decreasing=TRUE))))#
+names(wordList)		<-	names(coef(model))#
+names(wordCoefs)	<-	names(coef(model))
+wordCoefs[[1]][1:20]
+wordList[[1]][1:20]
+wordList[[2]][1:20]
+plot(model)
+sum(wordCoefs[[1]]>0)
+sum(wordCoefs[[2]]>0)
+sum(wordCoefs[[3]]>0)
+sum(wordCoefs[[4]]>0)
+sum(wordCoefs[[5]]>0)
+sum(wordCoefs[[6]]>0)
+sum(wordCoefs[[7]]>0)
+sum(wordCoefs[[8]]>0)
+sum(wordCoefs[[9]]>0)
+sum(wordCoefs[[10]]>0)
+lapply(wordCoefs,function(x)sum(x>0))
+tdm				<-	weightTfIdf(DocumentTermMatrix(Corpus(VectorSource(docs_clean)),normalize = TRUE)
+docs_clean		<-	docs[news_ind]
+tdm				<-	weightTfIdf(DocumentTermMatrix(Corpus(VectorSource(docs_clean))),normalize = TRUE)
+docs_clean		<-	docs[news_ind]
+tdm				<-	DocumentTermMatrix(Corpus(VectorSource(docs_clean)))
+tdm				<-	weightTfIdf(tdm[,unname(which(col_sums(tdm)>=10))],normalize = TRUE)
+dim(tdm)
+tdm
+X				<-	asSparseMatrix(tdm)
+table(colSums(X))
+table(rowSums(X))
+table(rowSums(X))==0
+which(table(rowSums(X))==0)
+Y				<-	unlist(labels[news_ind],use.names=FALSE)
+table(Y)
+train_sample	<-	sample(nrow(X),nrow(X))#
+Y_train			<-	Y[train_sample]#
+X_train			<-	X[train_sample,]
+names(which(table(Y_train)<20))
+unique(Y)
+names_not_want	<-	c(names(which(table(Y_train)<20)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide")
+names_not_want	<-	c(names(which(table(Y_train)<20)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))
+names_not_want
+not_wants		<-	unlist(sapply(,function(x){which(Y_train==x)}),use.names=FALSE)
+not_wants		<-	unlist(sapply(names_not_want,function(x){which(Y_train==x)}),use.names=FALSE)
+not_wants
+X_train			<-	X_train[-not_wants,]#
+Y_train			<-	Y_train[-not_wants]
+dim(X_train)
+news_ind	<-	which(unlist(lapply(labels,length),use.names=FALSE)>0)#
+names_not_want	<-	c(names(which(table(Y_train)<20)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))#
+not_wants		<-	unlist(sapply(names_not_want,function(x){which(Y_train==x)}),use.names=FALSE)
+docs_clean		<-	docs[news_ind]
+Y				<-	unlist(labels[news_ind],use.names=FALSE)
+names_not_want	<-	c(names(which(table(Y_train)<20)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))#
+not_wants		<-	unlist(sapply(names_not_want,function(x){which(Y_train==x)}),use.names=FALSE)
+Y				<-	Y[not_wants]
+Y				<-	unlist(labels[news_ind],use.names=FALSE)
+names_not_want	<-	c(names(which(table(Y)<20)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))#
+not_wants		<-	unlist(sapply(names_not_want,function(x){which(Y_train==x)}),use.names=FALSE)#
+Y				<-	Y[not_wants]
+length(Y)
+Y				<-	unlist(labels[news_ind],use.names=FALSE)
+names_not_want	<-	c(names(which(table(Y)<20)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))#
+not_wants		<-	unlist(sapply(names_not_want,function(x){which(Y_train==x)}),use.names=FALSE)
+Y				<-	Y[-not_wants]
+length(Y)
+rm(Y)
+news_ind
+Y				<-	unlist(labels[news_ind],use.names=FALSE)
+names(which(table(Y)<20))
+table(Y)
+names_not_want	<-	c(names(which(table(Y)<10)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))
+names_not_want
+Y				<-	unlist(labels[news_ind],use.names=FALSE)#
+names_not_want	<-	c(names(which(table(Y)<5)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))#
+not_wants		<-	unlist(sapply(names_not_want,function(x){which(Y_train==x)}),use.names=FALSE)
+not_wants
+Y				<-	unlist(labels[news_ind],use.names=FALSE)#
+names_not_want	<-	c(names(which(table(Y)<5)),c("early-lead","soloish","checkpoint","monkey-cage",#
+"wonk","the-fix","volokh-conspiracy","terrapins-insider","morning-mix","reliable-source",#
+"the-intersect","the-switch","in-theory","recruiting-insider","wizards-insider","grade-point", #
+"on-leadership","inspired-life","opinions","rampage","get-there","fact-checker","where-we-live","josh-rogin","digger",                 "achenblog","book-party","federal-eye","dr-gridlock","capital-business","going-out-guide"))#
+not_wants		<-	unlist(sapply(names_not_want,function(x){which(Y==x)}),use.names=FALSE)#
+Y				<-	Y[-not_wants]
+table(Y)
+Y				<-	unlist(labels[news_ind],use.names=FALSE)
+table(Y)
+grep("business",names(table(Y)))
+library(shiny)#
+library(shinyDND)#
+require(tm)#
+require(stringr)#
+require(foreach)#
+require(RJSONIO)#
+#
+source("Interface_Utilities.R")#
+source("coherence.R")#
+source("evaluation.R")#
+setwd("../InteractiveTools/R")#
+source("importsInterface.R")#
+setwd("../../interface_code")#
+steps_btw_training	<-	10#
+gibbs_iterations	<-	10#
+runApp("interface_fineGrainedV4")
+runApp("interface_fineGrainedV4")
+require(lda)#
+require(tm)#
+require(stringr)#
+require(foreach)#
+#
+setwd("../InteractiveTools/R")#
+source("importsInterface.R")#
+setwd("../../interface_code")
+canstraint.matrix.files		<-	list.files("annotatorData_clean/cnn/post_processing_objects")
+object.files				<-	list.files("annotatorData_clean/cnn/objects")
+dataObj	<-	get(load(paste0("annotatorData_clean/cnn/objects/",object.files[2])))
+K		<-	20
+corpus	<-	dataObj$corpus
+require(lda)
+vanilla_model	<-	lda.collapsed.gibbs.sampler(corpus$documents,K,corpus$vocab,alpha=50/K, eta=.01,num.iterations=50)#
+int.maps		<-	initialize.interactive.maps(vanilla_model$assignments)
+canstraint.matrix.files
+file=canstraint.matrix.files[1]
+file
+curr.mat			<-	get(load(paste0("annotatorData_clean/cnn/post_processing_objects/",file)))$constraint.matrix
+curr.mat
+int.maps			<-	add.constraints(int.maps$component.assignments,curr.mat,K,int.maps,edge.control=TRUE)
+interactive_model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents,K,corpus$vocab,num.iterations=50,alpha=50/K, eta=.01,int.maps)
+source("coherence")
+source("coherence.R")
+coherence
+int.coh			<-	NULL
+counter			<-	1
+van.coh[counter]	<-	coherence(vanilla_model,corpus$documents,M=10)
+van.coh			<-	coherence(vanilla_model,corpus$documents,M=10)
+int.coh			<-	NULL
+int.coh[counter]	<-	coherence(interactive_model,corpus$documents,M=10)
+int.coh
+int.coh[counter]
+van.coh
+int.coh			<-	list()
+int.coh[counter]	<-	coherence(interactive_model,corpus$documents,M=10)
+int.coh			<-	list()
+int.coh[[counter]]	<-	coherence(interactive_model,corpus$documents,M=10)
+int.coh
+con.mat			<-	NULL
+con.mat				<-	rbind(con.mat,curr.mat)
+con.mat
+int.maps		<-	initialize.interactive.maps(vanilla_model$assignments)#
+#
+van.coh			<-	coherence(vanilla_model,corpus$documents,M=10)#
+int.coh			<-	list()#
+counter			<-	1#
+con.mat			<-	NULL#
+for (file in canstraint.matrix.files){#
+	print(counter)#
+	curr.mat			<-	get(load(paste0("annotatorData_clean/cnn/post_processing_objects/",file)))$constraint.matrix#
+	con.mat				<-	rbind(con.mat, con.mat)#
+	int.maps			<-	add.constraints(int.maps$component.assignments,curr.mat,K,int.maps,edge.control=TRUE)#
+	interactive_model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents,K,corpus$vocab,num.iterations=50,alpha=50/K, eta=.01,int.maps)#
+	int.coh[[counter]]	<-	coherence(interactive_model,corpus$documents,M=10)#
+	counter				<-	counter+1#
+}
+int.coh
+lapply(int.coh,mean)
+unlist(lapply(int.coh,mean))
+plot(unlist(lapply(int.coh,mean)))
+plot(unlist(lapply(int.coh,mean)),type="l")
+plot(unlist(lapply(van.coh,mean)),type="l")
+points(unlist(lapply(int.coh,mean)),type="l",col=2)
+dim(con.mat)
+con.mat
+con.mat				<-	rbind(con.mat, curr.mat)
+con.mat
+van.coh			<-	coherence(vanilla_model,corpus$documents,M=10)#
+int.coh			<-	list()#
+counter			<-	1#
+con.mat			<-	NULL#
+for (file in canstraint.matrix.files){#
+	print(counter)#
+	curr.mat			<-	get(load(paste0("annotatorData_clean/cnn/post_processing_objects/",file)))$constraint.matrix#
+	con.mat				<-	rbind(con.mat, curr.mat)#
+	int.maps			<-	add.constraints(int.maps$component.assignments,curr.mat,K,int.maps,edge.control=TRUE)#
+	interactive_model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents,K,corpus$vocab,num.iterations=50,alpha=50/K, eta=.01,int.maps)#
+	int.coh[[counter]]	<-	coherence(interactive_model,corpus$documents,M=10)#
+	counter				<-	counter+1#
+}
+lapply(int.coh,mean)
+unlist(lapply(int.coh,mean))
+plot(unlist(lapply(int.coh,mean)),type="l")
+mean(van.coh)
+length(int.coh)
+rep(mean(van.coh),length(int.coh))
+points(rep(mean(van.coh),length(int.coh)),col=2)
+plot(unlist(lapply(int.coh,mean)),type="l")
+points(rep(mean(van.coh),length(int.coh)),col=2)
+plot(unlist(lapply(int.coh,mean)),type="l")#
+points(rep(mean(van.coh),length(int.coh)),col=2,type="l")#
+legend("bottomright",c("Interactive Coherence","Vanilla Coherence"),col=c(1,2),lty=1)
+plot(unlist(lapply(int.coh,mean)),type="l",ylab="Coherence",xlab="Interactive Round")
+plot(unlist(lapply(int.coh,mean)),type="l",ylab="Coherence at 10 words",xlab="Interactive Round")#
+points(rep(mean(van.coh),length(int.coh)),col=2,type="l")#
+legend("bottomright",c("Interactive Coherence","Vanilla Coherence"),col=c(1,2),lty=1)
+rm(list=ls())
+setwd("../InteractiveTools/R")#
+source("importsInterface.R")#
+setwd("../../interface_code")#
+source("coherence.R")#
+#
+canstraint.matrix.files		<-	list.files("annotatorData_clean/cnn/post_processing_objects")#
+object.files				<-	list.files("annotatorData_clean/cnn/objects")#
+#load data file #
+dataObj	<-	get(load(paste0("annotatorData_clean/cnn/objects/",object.files[2])))#
+K		<-	20#
+corpus	<-	dataObj$corpus#
+#
+out	<-	foreach(i=1:10)%do%{#
+vanilla_model	<-	lda.collapsed.gibbs.sampler(corpus$documents,K,corpus$vocab,alpha=50/K, eta=.01,num.iterations=50)#
+int.maps		<-	initialize.interactive.maps(vanilla_model$assignments)#
+#
+van.coh			<-	coherence(vanilla_model,corpus$documents,M=10)#
+int.coh			<-	list()#
+counter			<-	1#
+con.mat			<-	NULL#
+for (file in canstraint.matrix.files){#
+	print(counter)#
+	curr.mat			<-	get(load(paste0("annotatorData_clean/cnn/post_processing_objects/",file)))$constraint.matrix#
+	con.mat				<-	rbind(con.mat, curr.mat)#
+	int.maps			<-	add.constraints(int.maps$component.assignments,curr.mat,K,int.maps,edge.control=TRUE)#
+	interactive_model	<-	interactive.lda.collapsed.gibbs.sampler.hard(corpus$documents,K,corpus$vocab,num.iterations=50,alpha=50/K, eta=.01,int.maps)#
+	int.coh[[counter]]	<-	coherence(interactive_model,corpus$documents,M=10)#
+	counter				<-	counter+1#
+}#
+list(int.coh,vanilla.coh)#
+}
+require(lda)#
+require(tm)#
+require(stringr)#
+require(foreach)#
+require(doSNOW)#
+#
+setwd("../InteractiveTools/R")#
+source("importsInterface.R")#
+setwd("../../interface_code")#
+source("coherence.R")#
+#
+constraint.matrix.files		<-	list.files("annotatorData_clean/cnn/post_processing_objects")#
+object.files				<-	list.files("annotatorData_clean/cnn/objects")#
+#load data file #
+dataObj	<-	get(load(paste0("annotatorData_clean/cnn/objects/",object.files[2])))#
+K		<-	20#
+corpus	<-	dataObj$corpus
+vanilla_model	<-	lda.collapsed.gibbs.sampler(corpus$documents,K,corpus$vocab,alpha=50/K, eta=.01,num.iterations=10,compute.likelihood=TRUE)
+vanilla_model	<-	lda.collapsed.gibbs.sampler(corpus$documents,K,corpus$vocab,alpha=50/K, eta=.01,num.iterations=10,compute.log.likelihood=TRUE)
+names(vanilla_model)
+vaniall_model$log.likelihoods
+vanilla_model$log.likelihoods
+ls()
+loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums)
+loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums,eta=.01,alpha=50/K)
+loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums,eta=.01,alpha=50/K)-5348439
+loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums,eta=.01,alpha=50/K)+5348439
+loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums,eta=.01,alpha=50/K)
+5348439
+loglikelihood
+vanilla_model$log.likelihoods
+vanilla_model$log.likelihoods[1,]
+loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums)
+loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums,eta=.01,alpha=50/K)
+vanilla_model$log.likelihoods[1,]-loglikelihood(vanilla_model$topics,vanilla_model$document_sums,vanilla_model$topic_sums,eta=.01,alpha=50/K)
+getwd()

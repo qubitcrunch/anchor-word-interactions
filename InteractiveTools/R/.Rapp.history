@@ -1,0 +1,506 @@
+install.packages("plyr")
+source("importsInterface.R")
+install.packages("hash")
+source("importsInterface.R")
+setwd("../../interface_code")
+runApp("interface_fineGrainedV3")
+install.packages("DT")
+runApp("interface_fineGrainedV3")
+library(shiny)#
+library(shinyDND)#
+require(tm)#
+require(stringr)#
+require(foreach)#
+require(RJSONIO)#
+#string1		<- "This is a sentence and we want to drag from it directly"#
+#string2		<-	"This is another sententence and we want to dragit"#
+#source("trainScriptDFT.R")#
+#int.maps		<-	initialize.interactive.maps(topicMod$assignments)#
+# setwd("../InteractiveTools/R")#
+# source("importsInterface.R")#
+# setwd("../../interface_code")#
+source("Interface_Utilities.R")#
+source("coherence.R")#
+source("evaluation.R")#
+setwd("../InteractiveTools/R")#
+source("importsInterface.R")#
+setwd("../../interface_code")#
+runApp("interface_fineGrainedV3")
+runApp("interface_fineGrainedV3 copy")
+source("coherence_old.R")
+runApp("interface_fineGrainedV3 copy")
+nrow(topicMod$topics)
+to_display	<-	topic.intruder(topicMod,5,.1,10)
+to_display
+foreach(i=1:nrow(topicMod$topics)%do%{#
+																	fluidRow(h4(paste0("Topic ",i)),#
+																		do.call("div",#
+																			foreach(j=1:length(to_display[[i]]))%do%{#
+																			id		<-	paste0("word_",i,"_",j)#
+																			#	print(id)#
+																			drag	<-	dragUI(id,to_display[[i]]																		[j],style=paste0("float:left;","width:",150,"px"))#
+																	drag$children[[2]]<-	span(style="visibility:hidden",id)#
+																	drag#
+																	}#
+																	)#
+																	,column=10)#
+																	}
+do.call("div",#
+																			foreach(j=1:length(to_display[[i]]))%do%{#
+																			id		<-	paste0("word_",i,"_",j)#
+																			#	print(id)#
+																			drag	<-	dragUI(id,to_display[[i]]																		[j],style=paste0("float:left;","width:",150,"px"))#
+																	drag$children[[2]]<-	span(style="visibility:hidden",id)#
+																	drag#
+																	}#
+																	)
+i=1
+do.call("div",#
+																			foreach(j=1:length(to_display[[i]]))%do%{#
+																			id		<-	paste0("word_",i,"_",j)#
+																			#	print(id)#
+																			drag	<-	dragUI(id,to_display[[i]]																		[j],style=paste0("float:left;","width:",150,"px"))#
+																	drag$children[[2]]<-	span(style="visibility:hidden",id)#
+																	drag#
+																	}#
+																	)
+?actionButton
+to_Display[[i]]
+to_display[[i]]
+checkboxGroupInput(i,to_display[[i]])
+checkboxGroupInput(i,choices=to_display[[i]])
+checkboxGroupInput(i,choices=to_display[[i]],label=NULL)
+print("Preparing word intrusion panel")#
+										foreach(i=1:nrow(values$model$topics))%do%{#
+																	fluidRow(h4(paste0("Topic ",i)),#
+																		#do.call("div",#
+																		#	foreach(j=1:length(to_display[[i]]))%do%{#
+																		#	id		<-	paste0("word_",i,"_",j)#
+																			#	print(id)#
+																		#	drag	<-	dragUI(id,to_display[[i]]																		[j],style=paste0("float:left;","width:",150,"px"))#
+																	#drag$children[[2]]<-	span(style="visibility:hidden",id)#
+																	#drag#
+																	#}#
+																	#)#
+																	checkboxGroupInput(i,choices=to_display[[i]],label=NULL)#
+																	,column=10)#
+																	}
+rm(to_display)
+rm(i)
+runApp("interface_fineGrainedV3 copy")
+to_display	<-	topic.intruder(topicMod,5,.1,10)
+to_display
+do.call("div",foreach(i=1:nrow(topicMod$topics))%do%{#
+																	#fluidRow(h4(paste0("Topic ",i)),#
+																		#do.call("div",#
+																		#	foreach(j=1:length(to_display[[i]]))%do%{#
+																		#	id		<-	paste0("word_",i,"_",j)#
+																			#	print(id)#
+																		#	drag	<-	dragUI(id,to_display[[i]]																		[j],style=paste0("float:left;","width:",150,"px"))#
+																	#drag$children[[2]]<-	span(style="visibility:hidden",id)#
+																	#drag#
+																	#}#
+																	#)#
+																	checkboxGroupInput(i,choices=to_display[[i]],label=NULL)#
+																	#,column=10)#
+																	}#
+																)
+runApp("interface_fineGrainedV3 copy")
+checkboxGroupInput(1,choices=to_display[[1]],label=NULL)
+runApp("interface_fineGrainedV3 copy")
+runApp("interface_fineGrainedV3")
+library(shiny)#
+library(shinyDND)#
+require(tm)#
+require(stringr)#
+require(foreach)#
+require(RJSONIO)#
+#string1		<- "This is a sentence and we want to drag from it directly"#
+#string2		<-	"This is another sententence and we want to dragit"#
+#source("trainScriptDFT.R")#
+#int.maps		<-	initialize.interactive.maps(topicMod$assignments)#
+# setwd("../InteractiveTools/R")#
+# source("importsInterface.R")#
+# setwd("../../interface_code")#
+source("Interface_Utilities.R")#
+#source("coherence.R")#
+source("coherence_old.R")#
+source("evaluation.R")#
+setwd("../InteractiveTools/R")#
+source("importsInterface.R")#
+setwd("../../interface_code")#
+runApp("interface_fineGrainedV3")
+##	Input: #
+##		topicModel: a topic model with a $topics field#
+##		documents: a list of documents as produced by lexicalize or lexicalize2		#
+##	Output: #
+##		coherenceVector: a vector of coherences#
+coherence	<-	function(topicModel, documents, M=15){#
+	topWordIndices	<-	t(apply(topicModel$topics, 1, function(x) order(x, decreasing=T)[1:M]))#
+	codocument.frequency	<-	function(word1, word2){#
+		return(sum(sapply(documents, function(x) (word1 %in% x) && (word2 %in% x), USE.NAMES=FALSE)))#
+	}#
+	document.frequency	<-	function(word){#
+		return(sum(sapply(documents, function(x) word %in% x, USE.NAMES=FALSE)))#
+	}#
+	coherenceVector	<-	apply(topWordIndices, 1, function(x) #
+							sum(unlist(sapply(2:M, function(m) #
+									unlist(sapply(1:(m-1), function(l) log((codocument.frequency(x[m], x[l]) + 1.0)/document.frequency(x[l]))),use.names=FALSE)), use.names=FALSE))#
+						)	#
+	return(coherenceVector)#
+}
+setwd("../InteractiveTools/R")
+##	Input: #
+##		topicModel: a topic model with a $topics field#
+##		documents: a list of documents as produced by lexicalize or lexicalize2		#
+##	Output: #
+##		coherenceVector: a vector of coherences#
+coherence	<-	function(topicModel, documents, M=15){#
+	topWordIndices	<-	t(apply(topicModel$topics, 1, function(x) order(x, decreasing=T)[1:M]))#
+	codocument.frequency	<-	function(word1, word2){#
+		return(sum(sapply(documents, function(x) (word1 %in% x) && (word2 %in% x), USE.NAMES=FALSE)))#
+	}#
+	document.frequency	<-	function(word){#
+		return(sum(sapply(documents, function(x) word %in% x, USE.NAMES=FALSE)))#
+	}#
+	coherenceVector	<-	apply(topWordIndices, 1, function(x) #
+							sum(unlist(sapply(2:M, function(m) #
+									unlist(sapply(1:(m-1), function(l) log((codocument.frequency(x[m], x[l]) + 1.0)/document.frequency(x[l]))),use.names=FALSE)), use.names=FALSE))#
+						)	#
+	return(coherenceVector)#
+}
+require(lda)
+source("generator.synthetic.R")
+synthetic.dataset <- generator.synthetic(50, 1000, 10, 0.1, 0.1, 10)
+corpus <- lexicalize(synthetic.dataset$documents)
+model <- lda.collapsed.gibbs.sampler(corpus$documents, 10, corpus$vocab, 100, 0.1, 0.1)
+tcoherence <- coherence(model, corpus$documents)
+tcoherence
+require(SnowballC)
+require(stringr)
+require(tm)
+removeNumbers()
+removeNumbers("a65p")
+removeNumbers("9000")
+removeNumbers("9,000")
+removePunctuation("9,000")
+require(tm)
+stopwords("SMART")
+word.list <- stopwords("SMART")
+lowerX		<-	lapply(word.list, function(x) tolower(str_replace_all(x, "[^[:alnum:]]", " ")))
+require(tm)#
+	require(stringr)#
+	require(plyr)#
+	require(SnowballC)
+lowerX		<-	lapply(word.list, function(x) tolower(str_replace_all(x, "[^[:alnum:]]", " ")))
+lowerX
+lowerX		<-	lapply(lowerX,removeNumbers)
+procTokenX	<-	lapply(lowerX, function(x) sapply(x, function(w) gsub("^\\s+|\\s+$", "", w) ,USE.NAMES=FALSE))
+procTokenX
+procTokenX	<-	lapply(lowerX, function(x) sapply(x, function(w) gsub(" ", "", x, fixed = TRUE) ,USE.NAMES=FALSE))
+procTokenX
+procTokenX	<-	lapply(lowerX, function(x) sapply(x, function(w) gsub(" ", "", x, fixed = TRUE) ,USE.NAMES=FALSE))
+procTokenX
+proc_stop		<-	sapply(stop_words, function(x) tolower(str_replace_all(x, "[^[:alnum:]]", " ")), USE.NAMES=FALSE)
+stopwords("SMART")
+require(tm)#
+	require(stringr)#
+	require(plyr)#
+	require(SnowballC)
+stop_words <- stopwords("SMART")
+lower_stop_words		<-	sapply(stop_words, function(x) tolower(str_replace_all(x, "[^[:alnum:]]", " ")), USE.NAMES=FALSE)
+lower_stop_words
+lower_stop_words		<-	sapply(stop_words, removeNumbers, USE.NAMES=FALSE)
+proc_stop_words	<-	sapply(lower_stop_words, function(x) sapply(x, function(w) gsub("^\\s+|\\s+$", "", w) ,USE.NAMES=FALSE), USE.NAMES=FALSE)
+sapply(stop_words, function(x) sapply(x, function(w) gsub("'s", "", x, fixed = TRUE) ,USE.NAMES=FALSE))
+stop_words
+sstop <- gsub("'s", '', stop_words, fixed=TRUE)
+sstop
+dataset <- "cnn"#
+lines   <-   get(load(paste0("../../data/news/",dataset)))#
+    docs    <-   foreach(i=1:length(lines),.combine="c")%do%{#
+                    print(i)#
+                    line    <-   try(fromJSON(lines[i])$html,silent=TRUE)#
+                    if(class(line)=="try-error"){#
+                        out <- "error"#
+                    }#
+                    else{#
+                        out <-   line#
+                    }#
+                    out#
+                } #
+##Some errors might occur, remove them      #
+    errs    <-   which(docs=="error")#
+    if(length(errs)>0){#
+        lines   <-   lines[-errs]#
+        docs    <-   docs[-errs]#
+        }#
+##Get the urls, it would be nice to display these on the screen#
+    urls        <-   foreach(i=1:length(lines),.combine="c")%do%{#
+                        print(i)#
+                        fromJSON(lines[i])$url#
+                } #
+##Some ducplicate documents might appear, if so remove them#
+    dupDocsInd      <-   which(duplicated(docs))#
+    if(length(dupDocsInd)){#
+        lines       <-   lines[-dupDocsInd]#
+        docs        <-   docs[-dupDocsInd]#
+        urls        <-   urls[-dupDocsInd]#
+    }#
+##Run lexicalize2#
+    rawX        <-   docs#
+    dtm         <-   DocumentTermMatrix(Corpus(VectorSource(rawX)))#
+    ## Introduce space after '.' #
+    spacedX     <-   lapply(rawX, function(x) paste(strsplit(x,"\\.")[[1]],collapse=". "))#
+    stop_words  <-   stopwords("SMART")#
+    tokenX      <-   lapply(spacedX, function(x){#
+                                    strsplit(gsub("\n"," ",x)," ")[[1]]#
+                                    }#
+                                    )
+D=20
+V=1000
+Ks=20
+alpha=K/50
+alpha=Ks/50
+beta=
+.01
+lambda=10
+source("imports.R")
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)
+K=Ks
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)
+eta=.01
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)
+dataset
+corpus.size	<-	sum(dataset$doc_lengths)
+corpus 		<-	lexicalize(unlist(dataset$documents))
+num.consts	<-	choose(corpus.size, 2)
+num.consts
+cs			<- 	sum(unlist(lapply(corpus$documents, function(x) ncol(x))))
+corpus
+corpus$documents
+lapply(corpus$documents,function(x)x[1,])
+sapply(1:length(corpus$document),function(x)cbind(rep(x,ncol(x)),x[1,]))
+sapply(1:length(corpus$documents),function(x)cbind(rep(ncol(corpus$documents[[x]]),x),x[1,]))
+sapply(1:length(corpus$documents),function(x)cbind(rep(ncol(corpus$documents[[x]]),x),corpus$documents[[x]][1,]))
+warnings()
+sapply(1:length(corpus$documents),function(x)cbind(rep(ncol(corpus$documents[[x]]),x),corpus$documents[[x]][1,]))
+sapply(1:length(corpus$documents),function(x)cbind(rep(ncol(corpus$documents[[x]]),x),corpus$documents[[x]][1,]))
+x=1
+ncol(corpus$documents[[x]])
+rep(ncol(corpus$documents[[x]]),x)
+corpus$documents[[x]][1,]
+rep(ncol(corpus$documents[[x]]),x)
+cbind(rep(x,ncol(corpus$documents[[x]]),corpus$documents[[x]][1,])
+cbind(rep(x,ncol(corpus$documents[[x]]),corpus$documents[[x]][1,]))
+cbind(rep(x,ncol(corpus$documents[[x]]),corpus$documents[[x]][1,]))
+rep(x,ncol(corpus$documents[[x]])
+rep(x,ncol(corpus$documents[[x]]))
+x
+ncol(corpus$documents[[x]])
+rep(10,1)
+rep(1,10)
+ncol(corpus$documents[[x]])
+x
+rep(x,ncol(corpus$documents[[x]]))
+cbind(rep(x,ncol(corpus$documents[[x]])),corpus$documents[[x]][1,])
+sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)
+do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)
+s.matrix	<-	do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)
+s.matrix
+sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])
+dim(sparseMatrix(i=s.matrix[,1],j=s.matrix[,2]))
+t(sparseMatrix(i=s.matrix[,1],j=s.matrix[,2]))
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])
+t(dtm)%*%dtm
+co_occ		<-	t(dtm)%*%dtm
+co_occ
+X		<-	t(dtm)%*%dtm
+X			<-	t(apply(X, 1, function(v) v/sum(v)))
+sourceCpp("hottTools/src/hott.cpp")
+getwd()
+sourceCpp("../experiments/anchor_words/hottTools/src/hott.cpp")
+sourceCpp("../../experiments/anchor_words/hottTools/src/hott.cpp")
+sourceCpp("../../anchor_words/hottTools/src/hott.cpp")
+C <- hott_gradient_descent(X, 10,s_p=.001,s_d=.001 ,N_epochs= N_epochs)
+C <- hott_gradient_descent(X, 10,s_p=.001,s_d=.001 ,N_epochs= 10)
+C
+diag(C)
+C <- hott_gradient_descent(X, 10,s_p=.001,s_d=.001 ,N_epochs= 50)
+diag(C)
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 50)
+C
+diag(C)
+anchor_inds <- which(diag(C)==1)
+anchor_inds
+C <- hott_gradient_descent(X, 5,s_p=1,s_d=.001 ,N_epochs= 50)
+C
+diag(C)
+dim(X)
+C <- hott_gradient_descent(X, 50,s_p=1,s_d=.001 ,N_epochs= 50)
+diag(X)
+diag(C)
+plot(diag(C))
+which(diag(C)==1)
+C <- hott_gradient_descent(X, 100,s_p=1,s_d=.001 ,N_epochs= 50)
+which(diag(C)==1)
+which(diag(C)==1)
+C <- hott_gradient_descent(X, 100,s_p=1,s_d=.001 ,N_epochs= 50)
+which(diag(C)==1)
+which(diag(C)==1)
+C <- hott_gradient_descent(X, 50,s_p=1,s_d=.001 ,N_epochs= 50)
+which(diag(C)==1)
+C <- hott_gradient_descent(X, 20,s_p=1,s_d=.001 ,N_epochs= 50)
+which(diag(C)==1)
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 50)
+which(diag(C)==1)
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 150)
+which(diag(C)==1)
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 500)
+which(diag(C)==1)
+D=100
+V=20
+K=20
+V=300
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)
+corpus.size	<-	sum(dataset$doc_lengths)
+corpus 		<-	lexicalize(unlist(dataset$documents))
+num.consts	<-	choose(corpus.size, 2)
+s.matrix	<-	do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)#
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])
+X		<-	t(dtm)%*%dtm
+X			<-	t(apply(X, 1, function(v) v/sum(v)))
+dim(X)
+V=100
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size	<-	sum(dataset$doc_lengths)#
+corpus 		<-	lexicalize(unlist(dataset$documents))#
+num.consts	<-	choose(corpus.size, 2)#
+#
+s.matrix	<-	do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)#
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])					#
+X		<-	t(dtm)%*%dtm#
+X			<-	t(apply(X, 1, function(v) v/sum(v)))
+dim(X)
+V=1000
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size	<-	sum(dataset$doc_lengths)#
+corpus 		<-	lexicalize(unlist(dataset$documents))#
+num.consts	<-	choose(corpus.size, 2)#
+#
+s.matrix	<-	do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)#
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])					#
+X		<-	t(dtm)%*%dtm#
+X			<-	t(apply(X, 1, function(v) v/sum(v)))
+dim(X)
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 500)
+dim(C)
+diag(C)
+diag(C)==1
+sum(diag(C)==1)
+D<-20;V=2000;lambda=30;K=20#
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size	<-	sum(dataset$doc_lengths)#
+corpus 		<-	lexicalize(unlist(dataset$documents))#
+num.consts	<-	choose(corpus.size, 2)#
+#
+s.matrix	<-	do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)#
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])					#
+X		<-	t(dtm)%*%dtm#
+X			<-	t(apply(X, 1, function(v) v/sum(v)))#
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 20)
+sum(diag(C)==1)
+dim(X)
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 30)
+sum(diag(C)==1)
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 30)
+sum(diag(C)==1)
+C <- hott_gradient_descent(X, 100,s_p=1,s_d=.001 ,N_epochs= 30)
+sum(diag(C)==1)
+diag(C)
+dim(X)
+dim(dtm)
+D<-20;V=2000;lambda=50;K=10#
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size	<-	sum(dataset$doc_lengths)#
+corpus 		<-	lexicalize(unlist(dataset$documents))#
+num.consts	<-	choose(corpus.size, 2)#
+#
+s.matrix	<-	do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)#
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])
+dim(dtm)
+D<-20;V=2000;lambda=100;K=10#
+dataset 		<-	generator.synthetic(D, V, K, alpha, eta, lambda)#
+corpus.size	<-	sum(dataset$doc_lengths)#
+corpus 		<-	lexicalize(unlist(dataset$documents))#
+num.consts	<-	choose(corpus.size, 2)#
+#
+s.matrix	<-	do.call("rbind",sapply(1:length(corpus$documents),function(x){#
+					cbind(rep(x,ncol(corpus$documents[[x]])),(corpus$documents[[x]][1,]+1))#
+					}#
+					)#
+					)#
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])
+dim(dtm)
+X		<-	t(dtm)%*%dtm
+X			<-	t(apply(X, 1, function(v) v/sum(v)))
+C <- hott_gradient_descent(X, 100,s_p=1,s_d=.001 ,N_epochs= 10)
+diag(C)
+plot(diag(C))
+dtm			<-	sparseMatrix(i=s.matrix[,1],j=s.matrix[,2])					#
+X		<-	t(dtm)%*%dtm#
+X			<-	t(apply(X, 1, function(v) v/sum(v)))#
+C <- hott_gradient_descent(X, 10,s_p=1,s_d=.001 ,N_epochs= 10)
+diag(C)
+diag(C)==1
+sum(diag(C)==1)
+C <- hott_gradient_descent(X, 50, ,N_epochs= 50)
+diag(C)
+sum(diag(C))
+sum(diag(C)==1)
+sum(diag(C)>,5)
+sum(diag(C)>.5)
+sum(diag(C)>.4)
+sum(diag(C)>.1)
+dim(X)
+X
+X[,1]
+X		<-	t(dtm)%*%dtm
+C <- hott_gradient_descent(X, 50, ,N_epochs= 50)
+X		<-	t(dtm)%*%dtm
+X
+X			<-	t(apply(X, 1, function(v) v))
+X
+C <- hott_gradient_descent(X, 50, ,N_epochs= 50)
